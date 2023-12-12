@@ -1,0 +1,178 @@
+---
+title: "NYPD Shooting Report"
+date: "2023-12-01"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This report analyzes data on shooting cases of NYPD. The data was obtained directly from NYPD website.
+
+The goal of this analysis are
+
+1.  find out any yearly trends in shooting incidents
+2.  any correlations between murder case and victim's gender
+3.  potential biases of the provided data & this analysis
+
+## Date Preparation
+
+I'll first read in the file, and then tidy the data based on the summary of the data and the goal of this analysis.
+
+```{r}
+# Library in packages that might need
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(stats)
+
+# read in data 
+ShootingData <- read_csv('https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD')
+#see the summary of the data
+summary(ShootingData)
+# remove columns that not going to be used in this analysis 
+ShootingData <- ShootingData %>%
+  select(-c(INCIDENT_KEY,LOC_OF_OCCUR_DESC,JURISDICTION_CODE,LOC_CLASSFCTN_DESC,LOCATION_DESC,PERP_AGE_GROUP,PERP_SEX,PERP_RACE,VIC_AGE_GROUP,VIC_RACE,X_COORD_CD,Y_COORD_CD,Latitude,Longitude,Lon_Lat,PRECINCT))
+
+# convert OCCUR_DATE to date format
+ShootingData$OCCUR_DATE <- as.Date(ShootingData$OCCUR_DATE, format = "%m/%d/%Y")
+
+# Extract year and month
+ShootingData$Year <- format(ShootingData$OCCUR_DATE, "%Y")
+ShootingData$Month <- format(ShootingData$OCCUR_DATE, "%m")
+# see the summary of the data again
+summary(ShootingData)
+```
+
+## Visualizing Yearly Shooting Case Trends
+
+### *Yearly Trends*
+
+```{r}
+# group data by year
+yearly_trends <- ShootingData %>%
+  group_by(Year) %>%
+  summarise(Shooting_Incidents = n())
+
+# show yearly visual 
+ggplot(yearly_trends, aes(x = Year, y = Shooting_Incidents)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Yearly Trends in Shooting Incidents",
+     x = "Year",
+     y = "Number of Shooting Incidents")
+
+
+
+```
+
+From the visualization i can see that
+
+1.  the highest number of shooting incidents occurred in 2006, the lowest number was in 2017.
+2.  there is a general decreasing trend in shooting incidents from 2006 to 2019.
+3.  in 2020, there is a noticeable increase in the number of shooting cases. additional information might required to further analysis the reason of this change. for example social & economical trend, government police changes and so on.
+
+### *Yearly Trends by Boro*
+
+```{r}
+# Group data by year and borough
+yearly_trends_borough <- ShootingData %>%
+     group_by(Year, BORO) %>%
+     summarise(Shooting_Incidents = n(), .groups = 'drop')
+
+# Plot yearly trends by borough using a stacked bar chart
+ggplot(yearly_trends_borough, aes(x = Year, y = Shooting_Incidents, fill = BORO)) +
+     geom_bar(stat = "identity") +
+     labs(title = "Yearly Trends in Shooting Incidents by Boro",
+          x = "Year",
+          y = "Number of Shooting Incidents",
+          fill = "Borough")
+```
+
+From the above yearly trends & distribution by boro bar chart， we can see that
+
+1、Bronx & Brooklyn has the highest number of shooting incident occurred
+
+2、STATEN ISLAND has the lowest number of shooting incident occurred
+
+3、the above two finding does not mean that any boro are more dangerous or safer because population，how big the area is and other indicator has not been considered during the analysis
+
+## Modelling Date between murder case and victim's gender
+
+### *Frequency analysis* 
+
+```{r}
+# count number of murder case and non murder case and their percentages in all cases.
+ murder_count = sum(ShootingData$STATISTICAL_MURDER_FLAG)
+ non_murder_count <- sum(!ShootingData$STATISTICAL_MURDER_FLAG)
+ murder_prop <- murder_count / nrow(ShootingData)
+ non_murder_prop <- non_murder_count / nrow(ShootingData)
+ 
+ #Murder Count 
+ print(murder_count)
+ #Non-Murder Count
+ print(non_murder_count)
+ #Murder Percentage
+ print(murder_prop)
+```
+
+### *Cross-tabulation*
+
+```{r}
+ cross_table <- ShootingData %>%
+     group_by(VIC_SEX, STATISTICAL_MURDER_FLAG) %>%
+     summarise(count = n())
+ 
+print(cross_table)
+```
+
+### *Visualization*
+
+```{r}
+ggplot(ShootingData, aes(x = VIC_SEX, fill = STATISTICAL_MURDER_FLAG, y = 1)) +
+     geom_bar(stat = "identity") +
+     labs(title = "Victim Gender vs. Murder", x = "Victim Gender", y = "Count", fill = "Murder")
+```
+
+### *Statistical tests*
+
+```{r}
+
+ chisq_test <- chisq.test(table(ShootingData$VIC_SEX, ShootingData$STATISTICAL_MURDER_FLAG))
+ 
+ print(chisq_test)
+
+```
+
+based on the test , X-squared = 2.8188, degree of freedom = 2 and p-value = 0.2443
+
+the p-value of 0.2443 is greater than the typical significance level of 0,05. this is suggests that there is not enough evidence to reject the null hypotheses that **there is no statistically significant relationship between victim's gender and murder cases in the data.**
+
+## Conclusion:
+
+1.  the highest number of shooting incidents occurred in 2006, the lowest number was in 2017.
+2.  there is a general decreasing trend in shooting incidents from 2006 to 2019.
+3.  in 2020, there is a noticeable increase in the number of shooting cases. additional information might required to further analysis the reason of this change. for example social & economical trend, government police changes and so on.
+4.  Bronx & Brooklyn has the highest number of shooting incident occurred
+5.  STATEN ISLAND has the lowest number of shooting incident occurred
+6.  the above two finding (5\\6)does not mean that any boro are more dangerous or safer because population，how big the area is and other indicator has not been considered during the analysis
+7.  **there is no statistically significant relationship between victim's gender and murder cases in the data.**
+
+## Potential biases of the provided data & this analysis
+
+**Bias of the original data:**
+
+1.  if all shooting case was included in the original data, as there might be not all shooting case was reported to the police or aware by the police so might not be all cases are listed.
+2.  how police identify if a shooting case is a murder case is based on the the information they have and their experiences on prior cases.
+3.  there are missing information in the data might due to the case is still in investigation , such as we have all victim's gender but dont have all the prep's gender, because the nypd might havent find the prep.
+
+**Personal Bias:**
+
+1.  as someone not familiar with New York, I might have conclusions about some boro is more dangerous than other boro just base on the number of shooting case and the murder percentage. but as i mentioned that those analysis did not consider other indicators such as population, how big of the are and other factors. it is important to understand the data and the thing the data was looking into.
+2.  personal experience might affect how we do the analysis ( if you are familiar with the method you gonna use or the most appropriate method) and the topic you choose to analyze.
